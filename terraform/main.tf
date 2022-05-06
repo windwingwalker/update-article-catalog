@@ -24,5 +24,5 @@ module "lambda" {
 module "eventbridge" {
   source = "./modules/eventbridge"
   app_name = var.app_name
-  function = module.lambda.function_arn
+  function_arn = module.lambda.function_arn
 }
