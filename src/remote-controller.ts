@@ -1,63 +1,47 @@
-import { DynamoDBClient, UpdateItemCommand, UpdateItemCommandOutput } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, PutItemCommand, PutItemCommandOutput } from "@aws-sdk/client-dynamodb";
 import { HTTPResponse } from "./http-response"
-import { Article, StatusCode } from "./model";
+import { marshall } from "@aws-sdk/util-dynamodb";
+import { Article, ArticleIndex, ArticleMetadata, PlainArticle, StatusCode } from "./model";
 import axios, { AxiosResponse } from "axios";
-import { ArticleNotFoundError, ArticleUploadError } from "./error";
-import { SQSHandler, SQSEvent } from "aws-lambda";
+import { ArticleIndexNotFoundError, ArticleIndexUploadError, ArticleUploadError, ArticleNotFoundError  } from "./error";
 
 const dynamodbClient = new DynamoDBClient({ region: "us-east-1" });
 
-const updateArticle = async (firstPublished: number, lastModified: number): Promise<StatusCode> => {
-  const command: UpdateItemCommand = new UpdateItemCommand({
-    Key: {
-      "firstPublished": {'N': firstPublished.toString()},
-      "lastModified": {'N': lastModified.toString()}
-    },
-    UpdateExpression: 'SET #views = #views + :incr',    
-    ExpressionAttributeValues: { ':incr': {'N': '1'}},
-    ExpressionAttributeNames: { "#views": "views"},
-    TableName: "articles"
-  });
-  const response: UpdateItemCommandOutput = await dynamodbClient.send(command);
+const putArticleIndex = async (articleIndex: ArticleIndex): Promise<number> => {
+  const objectInDynamoDB = marshall(articleIndex, {convertClassInstanceToMap: true})
+  const command: PutItemCommand = new PutItemCommand({Item: objectInDynamoDB, TableName: "article-index"});
+  const response: PutItemCommandOutput = await dynamodbClient.send(command);
   return response.$metadata.httpStatusCode
-}
-
-interface SQSRecord{
-  messageId: string,
-  receiptHandle: string,
-  body: string,
-  attributes: any
-  messageAttributes: any
-  md5OfBody: string
-  eventSource: string
-  eventSourceARN: string
-  awsRegion: string
 }
 
 exports.lambdaHandler = async (event, context) => {
   /**
-   * 1) Get message list from event, and loop the following
-   * 2) Get article id from message
-   * 3) Get the article based on article id
-   * 4) Update article's views, and update article's view attribute to db
+   * 1) Get article index
+   * 2) Loop each article metadata within article index
+   * 3) In each iteration of the loop, get article's views
+   * 4) Update article index views of the article
+   * 5) When loop end, update the whole article index to db
    */
   try {
-    // const messageList: SQSRecord[] = event["Records"]
-    // console.info("Message length is: " + messageList.length)
+    const articleIndexResponse: AxiosResponse = await axios.get<ArticleIndex>(`https://${process.env.API_ID}.execute-api.us-east-1.amazonaws.com/prod/article-index`)
+    if (articleIndexResponse["status"] == 404) throw new ArticleIndexNotFoundError();
+    var articleIndex: ArticleIndex = articleIndexResponse["data"] as ArticleIndex;
 
-    // for (var message of messageList){
-    //   const id: string = message["body"]
-    //   console.info("Message is: " + id)
+    for (var i = 0; i < articleIndex["body"].length; i++){
+      for (var j = 0; j < articleIndex["body"][i].length; j++){
+        const id = articleIndex["body"][i][j]["firstPublished"]
+        const articleResponse: AxiosResponse = await axios.get(`https://${process.env.API_ID}.execute-api.us-east-1.amazonaws.com/prod/article?id=${id}`)
+        if (articleResponse["status"] == 404) throw new ArticleNotFoundError(id);
+        var article: Article = articleResponse["data"] as Article;
 
-    //   const articleResponse: AxiosResponse = await axios.get(`https://${process.env.API_ID}.execute-api.us-east-1.amazonaws.com/prod/article?id=${id}`)
-    //   if (articleResponse["status"] == 404) throw new ArticleNotFoundError(id);
-    //   var article: Article = articleResponse["data"] as Article;
-    
-    //   const articleStatusCode: number = await updateArticle(article["firstPublished"], article["lastModified"]);
-    //   if (articleStatusCode != 200) throw new ArticleUploadError(article["firstPublished"]);
-    // };
-    console.log("Hello world");
-    return new HTTPResponse(200, "Successfully Updated Views");
+        articleIndex["body"][i][j]["views"] = article["views"]
+      }
+    }
+
+    const articleIndexStatusCode: number = await putArticleIndex(articleIndex);
+    if (articleIndexStatusCode != 200) throw new ArticleIndexUploadError();
+
+    return new HTTPResponse(200, "Successfully Updated Index Views");
   } catch (err) {
     console.error(err);
     return new HTTPResponse(err["status"], JSON.stringify({"Error Message: ": err["message"]}));

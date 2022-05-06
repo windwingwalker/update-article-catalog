@@ -1,7 +1,7 @@
 resource "aws_cloudwatch_event_rule" "default" {
     name = var.app_name
     description = "Fires at 3am UTC+8 daily"
-    schedule_expression = "rate(5 minutes)"
+    schedule_expression = "cron(0 21 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "default" {
