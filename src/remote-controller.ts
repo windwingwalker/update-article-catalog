@@ -29,9 +29,9 @@ exports.lambdaHandler = async (event, context) => {
 
     for (var i = 0; i < articleIndex["body"].length; i++){
       for (var j = 0; j < articleIndex["body"][i].length; j++){
-        const id = articleIndex["body"][i][j]["firstPublished"]
-        const articleResponse: AxiosResponse = await axios.get(`https://${process.env.API_ID}.execute-api.us-east-1.amazonaws.com/prod/article?id=${id}`)
-        if (articleResponse["status"] == 404) throw new ArticleNotFoundError(id);
+        const firstPublished = articleIndex["body"][i][j]["firstPublished"]
+        const articleResponse: AxiosResponse = await axios.get(`https://${process.env.API_ID}.execute-api.us-east-1.amazonaws.com/prod/article?firstPublished=${firstPublished}`)
+        if (articleResponse["status"] == 404) throw new ArticleNotFoundError(firstPublished);
         var article: Article = articleResponse["data"] as Article;
 
         articleIndex["body"][i][j]["views"] = article["views"]
