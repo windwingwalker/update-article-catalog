@@ -2,6 +2,6 @@ variable "function_arn" {
   type = string
 }
 
-variable "app_name" {
+variable "ms_name" {
   type = string
 }

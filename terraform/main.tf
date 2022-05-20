@@ -13,7 +13,7 @@ provider "aws" {
   region = var.aws_region
   default_tags {
     tags = {
-      "app" = "article"
+      "app" = var.app_name
     }
   }
 }
@@ -21,13 +21,12 @@ provider "aws" {
 module "lambda" {
   source = "./modules/lambda/"
   app_name = var.app_name
-  lambda_role = var.lambda_role
+  ms_name = var.ms_name
   tag = var.tag
-  api_id = var.api_id
 }
 
 module "eventbridge" {
   source = "./modules/eventbridge"
-  app_name = var.app_name
+  ms_name = var.ms_name
   function_arn = module.lambda.function_arn
 }

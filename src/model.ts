@@ -27,11 +27,11 @@ export interface Article{
   }[];
 }
 
-export interface ArticleIndex{
+export interface ArticleCatalog{
   id: string;
   lastModified: number;
   count: number;
-  body: ArticleMetadata[][];
+  body: ArticleMetadata[];
 }
 
 export interface ArticleMetadata{
